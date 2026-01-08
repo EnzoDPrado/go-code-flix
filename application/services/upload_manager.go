@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -64,7 +65,61 @@ func (vu *VideoUpload) loadPaths() error {
 	return nil
 }
 
-func (vu *VideoUpload) getClientUpload() (*storage.Client, context.Context, error) {
+func (vu *VideoUpload) ProcessUpload(concurrency int, doneUpload chan string) error {
+	in := make(chan int, runtime.NumCPU())
+	returnChannel := make(chan string)
+
+	err := vu.loadPaths()
+
+	if err != nil {
+		return nil
+	}
+
+	uploadClient, ctx, err := getClientUpload()
+
+	if err != nil {
+		return nil
+	}
+
+	for process := 0; process < concurrency; process++ {
+		go vu.uploadWorker(in, returnChannel, uploadClient, ctx)
+	}
+
+	go func() {
+		for x := 0; x < len(vu.Paths); x++ {
+			in <- x
+		}
+		close(in)
+	}()
+
+	for r := range returnChannel {
+		if r != "" {
+			doneUpload <- r
+			break
+		}
+	}
+
+
+	return nil
+}
+
+func (vu *VideoUpload) uploadWorker(in chan int, returnChan chan string, uploadClient *storage.Client, ctx context.Context) {
+	for x := range in {
+		err := vu.UploadObject(vu.Paths[x], uploadClient, ctx)
+
+		if err != nil {
+			vu.Errors = append(vu.Errors, vu.Paths[x])
+			
+			returnChan <- err.Error()
+		}
+
+		returnChan <- ""
+	}
+
+	returnChan <- "Uploaded completed"
+}
+
+func getClientUpload() (*storage.Client, context.Context, error) {
 	ctx := context.Background()
 
 	client, err := storage.NewClient(ctx)
