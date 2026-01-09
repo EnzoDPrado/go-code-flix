@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,7 +35,6 @@ func (vu *VideoUpload) UploadObject(objectPath string, client *storage.Client, c
 	defer f.Close()
 
 	wc := client.Bucket(vu.OutputBucket).Object(path[1]).NewWriter(ctx)
-	wc.ACL = []storage.ACLRule{{Entity: storage.AllUsers, Role: storage.RoleReader}}
 
 	if _, err := io.Copy(wc, f); err != nil {
 		return err
@@ -48,7 +48,6 @@ func (vu *VideoUpload) UploadObject(objectPath string, client *storage.Client, c
 }
 
 func (vu *VideoUpload) loadPaths() error {
-
 	err := filepath.Walk(vu.VideoPath, func(path string, info os.FileInfo, err error) error {
 
 		if !info.IsDir() {
@@ -72,13 +71,13 @@ func (vu *VideoUpload) ProcessUpload(concurrency int, doneUpload chan string) er
 	err := vu.loadPaths()
 
 	if err != nil {
-		return nil
+		return err
 	}
 
 	uploadClient, ctx, err := getClientUpload()
 
 	if err != nil {
-		return nil
+		return err
 	}
 
 	for process := 0; process < concurrency; process++ {
@@ -99,7 +98,6 @@ func (vu *VideoUpload) ProcessUpload(concurrency int, doneUpload chan string) er
 		}
 	}
 
-
 	return nil
 }
 
@@ -109,14 +107,15 @@ func (vu *VideoUpload) uploadWorker(in chan int, returnChan chan string, uploadC
 
 		if err != nil {
 			vu.Errors = append(vu.Errors, vu.Paths[x])
-			
+
+			log.Printf("error during the upload: %v. Error: %v", vu.Paths[x], err)
 			returnChan <- err.Error()
 		}
 
 		returnChan <- ""
 	}
 
-	returnChan <- "Uploaded completed"
+	returnChan <- "Upload completed"
 }
 
 func getClientUpload() (*storage.Client, context.Context, error) {
