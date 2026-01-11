@@ -23,7 +23,7 @@ func init() {
 
 func prepare() (*domain.Video, repositories.VideoRepositoryDb) {
 	db := database.NewDbTest()
-	defer db.Close()
+	defer db.Close()	
 
 	video := domain.NewVideo()
 	video.ID = uuid.NewV4().String()
