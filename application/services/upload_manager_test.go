@@ -21,16 +21,15 @@ func TestVideoServiceUpload(t *testing.T) {
 	video, repo := prepare()
 
 	videoService := services.NewVideoService()
-	videoService.Video = video
 	videoService.VideoRepository = repo
 
-	err := videoService.Download("bucket-study-go")
+	err := videoService.Download(video, "bucket-study-go")
 	require.Nil(t, err)
 
-	err = videoService.Fragment()
+	err = videoService.Fragment(video)
 	require.Nil(t, err)
 
-	err = videoService.Encode()
+	err = videoService.Encode(video)
 	require.Nil(t, err)
 
 	videoUpload := services.NewVideoUpload()
@@ -43,7 +42,7 @@ func TestVideoServiceUpload(t *testing.T) {
 	result := <-doneUpload
 	require.Equal(t, result, "Upload completed")
 
-	err = videoService.Finish()
+	err = videoService.Finish(video)
 	require.Nil(t, err)
 
 }

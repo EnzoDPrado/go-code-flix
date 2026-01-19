@@ -14,14 +14,14 @@ type JobService struct {
 	VideoService  VideoService
 }
 
-func (j *JobService) Start() error {
+func (j *JobService) Start(video *domain.Video) error {
 	err := j.changeJobStatus("DOWNLOADING")
 
 	if err != nil {
 		return j.failJob(err)
 	}
 
-	err = j.VideoService.Download(os.Getenv("inputBucketName"))
+	err = j.VideoService.Download(video, os.Getenv("inputBucketName"))
 
 	if err != nil {
 		return j.failJob(err)
@@ -33,7 +33,7 @@ func (j *JobService) Start() error {
 		return j.failJob(err)
 	}
 
-	err = j.VideoService.Fragment()
+	err = j.VideoService.Fragment(video)
 
 	if err != nil {
 		return j.failJob(err)
@@ -45,7 +45,7 @@ func (j *JobService) Start() error {
 		return j.failJob(err)
 	}
 
-	err = j.VideoService.Encode()
+	err = j.VideoService.Encode(video)
 
 	if err != nil {
 		return j.failJob(err)
@@ -53,7 +53,7 @@ func (j *JobService) Start() error {
 
 	err = j.changeJobStatus("UPLOADING")
 
-	err = j.performUpload()
+	err = j.performUpload(video)
 
 	if err != nil {
 		return j.failJob(err)
@@ -65,7 +65,7 @@ func (j *JobService) Start() error {
 		return j.failJob(err)
 	}
 
-	err = j.VideoService.Finish()
+	err = j.VideoService.Finish(video)
 
 	if err != nil {
 		return j.failJob(err)
@@ -80,7 +80,7 @@ func (j *JobService) Start() error {
 	return nil
 }
 
-func (j *JobService) performUpload() error {
+func (j *JobService) performUpload(video *domain.Video) error {
 	err := j.changeJobStatus("UPLOADING")
 
 	if err != nil {
@@ -89,7 +89,7 @@ func (j *JobService) performUpload() error {
 
 	videoUpload := NewVideoUpload()
 	videoUpload.OutputBucket = os.Getenv("outputBucketName")
-	videoUpload.VideoPath = os.Getenv("localStoragePath") + "/" + j.VideoService.Video.ID
+	videoUpload.VideoPath = os.Getenv("localStoragePath") + "/" + video.ID
 	concurrency, _ := strconv.Atoi(os.Getenv("CONCURRENCY_UPLOAD"))
 
 	doneUpload := make(chan string)

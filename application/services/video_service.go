@@ -13,7 +13,6 @@ import (
 )
 
 type VideoService struct {
-	Video           *domain.Video
 	VideoRepository repositories.VideoRepository
 }
 
@@ -21,7 +20,7 @@ func NewVideoService() VideoService {
 	return VideoService{}
 }
 
-func (v *VideoService) Download(bucketName string) error {
+func (v *VideoService) Download(video *domain.Video, bucketName string) error {
 	ctx := context.Background()
 
 	client, err := storage.NewClient(ctx)
@@ -31,7 +30,7 @@ func (v *VideoService) Download(bucketName string) error {
 	}
 
 	bkt := client.Bucket(bucketName)
-	obj := bkt.Object(v.Video.FilePath)
+	obj := bkt.Object(video.FilePath)
 
 	r, err := obj.NewReader(ctx)
 
@@ -47,7 +46,7 @@ func (v *VideoService) Download(bucketName string) error {
 		return err
 	}
 
-	f, err := os.Create(os.Getenv("localStoragePath") + "/" + v.Video.ID + ".mp4")
+	f, err := os.Create(os.Getenv("localStoragePath") + "/" + video.ID + ".mp4")
 
 	if err != nil {
 		return err
@@ -57,20 +56,20 @@ func (v *VideoService) Download(bucketName string) error {
 
 	defer f.Close()
 
-	log.Printf("video %v has been stored", v.Video.ID)
+	log.Printf("video %v has been stored", video.ID)
 
 	return nil
 }
 
-func (v *VideoService) Fragment() error {
-	err := os.Mkdir(os.Getenv("localStoragePath")+"/"+v.Video.ID, os.ModePerm)
+func (v *VideoService) Fragment(video *domain.Video) error {
+	err := os.Mkdir(os.Getenv("localStoragePath")+"/"+video.ID, os.ModePerm)
 
 	if err != nil {
 		return err
 	}
 
-	source := os.Getenv("localStoragePath") + "/" + v.Video.ID + ".mp4"
-	target := os.Getenv("localStoragePath") + "/" + v.Video.ID + ".frag"
+	source := os.Getenv("localStoragePath") + "/" + video.ID + ".mp4"
+	target := os.Getenv("localStoragePath") + "/" + video.ID + ".frag"
 
 	cmd := exec.Command("mp4fragment", source, target)
 
@@ -85,12 +84,12 @@ func (v *VideoService) Fragment() error {
 	return nil
 }
 
-func (v *VideoService) Encode() error {
+func (v *VideoService) Encode(video *domain.Video) error {
 	cmdArgs := []string{}
-	cmdArgs = append(cmdArgs, os.Getenv("localStoragePath")+"/"+v.Video.ID+".frag")
+	cmdArgs = append(cmdArgs, os.Getenv("localStoragePath")+"/"+video.ID+".frag")
 	cmdArgs = append(cmdArgs, "--use-segment-timeline")
 	cmdArgs = append(cmdArgs, "-o")
-	cmdArgs = append(cmdArgs, os.Getenv("localStoragePath")+"/"+v.Video.ID)
+	cmdArgs = append(cmdArgs, os.Getenv("localStoragePath")+"/"+video.ID)
 	cmdArgs = append(cmdArgs, "-f")
 	cmdArgs = append(cmdArgs, "--exec-dir")
 	cmdArgs = append(cmdArgs, "/opt/bento4/bin/")
@@ -107,33 +106,33 @@ func (v *VideoService) Encode() error {
 	return nil
 }
 
-func (v *VideoService) Finish() error {
-	err := os.Remove(os.Getenv("localStoragePath") + "/" + v.Video.ID + ".mp4")
+func (v *VideoService) Finish(video *domain.Video) error {
+	err := os.Remove(os.Getenv("localStoragePath") + "/" + video.ID + ".mp4")
 
 	if err != nil {
-		log.Println("error removing mp4", v.Video.ID, ".mp4")
+		log.Println("error removing mp4", video.ID, ".mp4")
 		return err
 	}
 
-	err = os.Remove(os.Getenv("localStoragePath") + "/" + v.Video.ID + ".frag")
+	err = os.Remove(os.Getenv("localStoragePath") + "/" + video.ID + ".frag")
 
 	if err != nil {
-		log.Println("error removing frag", v.Video.ID, ".frag")
+		log.Println("error removing frag", video.ID, ".frag")
 		return err
 	}
 
-	err = os.RemoveAll(os.Getenv("localStoragePath") + "/" + v.Video.ID)
+	err = os.RemoveAll(os.Getenv("localStoragePath") + "/" + video.ID)
 
 	if err != nil {
-		log.Println("error removing video file", v.Video.ID)
+		log.Println("error removing video file", video.ID)
 		return err
 	}
 
 	return nil
 }
 
-func (v *VideoService) InsertVideo() error {
-	_, err := v.VideoRepository.Insert(v.Video)
+func (v *VideoService) InsertVideo(video *domain.Video) error {
+	_, err := v.VideoRepository.Insert(video)
 
 	if err != nil {
 		return err

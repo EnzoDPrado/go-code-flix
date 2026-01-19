@@ -28,27 +28,29 @@ func JobWorker(messageChannel chan amqp.Delivery, returnChan chan JobWorkerResul
 			continue
 		}
 
-		err = json.Unmarshal(message.Body, &jobService.VideoService.Video)
-		jobService.VideoService.Video.ID = uuid.NewV4().String()
+		video := &domain.Video{}
+
+		err = json.Unmarshal(message.Body, video)
+		video.ID = uuid.NewV4().String()
 
 		if err != nil {
 			returnChan <- returnJobResult(domain.Job{}, message, err)
 			continue
 		}
 
-		err = jobService.VideoService.Video.Validate()
+		err = video.Validate()
 		if err != nil {
 			returnChan <- returnJobResult(domain.Job{}, message, err)
 			continue
 		}
 
-		err = jobService.VideoService.InsertVideo()
+		err = jobService.VideoService.InsertVideo(video)
 		if err != nil {
 			returnChan <- returnJobResult(domain.Job{}, message, err)
 			continue
 		}
 
-		job.Video = jobService.VideoService.Video
+		job.Video = video
 		job.OutputBucketPath = os.Getenv("outputBucketName")
 		job.ID = uuid.NewV4().String()
 		job.Status = "STARTING"
@@ -61,7 +63,7 @@ func JobWorker(messageChannel chan amqp.Delivery, returnChan chan JobWorkerResul
 		}
 
 		jobService.Job = &job
-		err = jobService.Start()
+		err = jobService.Start(video)
 
 		if err != nil {
 			returnChan <- returnJobResult(domain.Job{}, message, err)
