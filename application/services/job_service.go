@@ -9,82 +9,81 @@ import (
 )
 
 type JobService struct {
-	Job           *domain.Job
 	JobRepository repositories.JobRepository
 	VideoService  VideoService
 }
 
-func (j *JobService) Start(video *domain.Video) error {
-	err := j.changeJobStatus("DOWNLOADING")
+func (j *JobService) Start(job *domain.Job, video *domain.Video) error {
+	err := j.changeJobStatus(job, "DOWNLOADING")
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
 	err = j.VideoService.Download(video, os.Getenv("inputBucketName"))
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
-	err = j.changeJobStatus("FRAGMENTING")
+	err = j.changeJobStatus(job, "FRAGMENTING")
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
 	err = j.VideoService.Fragment(video)
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
-	err = j.changeJobStatus("ENCODING")
+	err = j.changeJobStatus(job, "ENCODING")
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
 	err = j.VideoService.Encode(video)
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
-	err = j.changeJobStatus("UPLOADING")
+	err = j.changeJobStatus(job, "UPLOADING")
 
-	err = j.performUpload(video)
+	err = j.performUpload(job, video)
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
-	err = j.changeJobStatus("FINISHING")
+	err = j.changeJobStatus(job, "FINISHING")
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
 	err = j.VideoService.Finish(video)
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
-	err = j.changeJobStatus("COMPLETED")
+	err = j.changeJobStatus(job, "COMPLETED")
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
 	return nil
 }
 
-func (j *JobService) performUpload(video *domain.Video) error {
-	err := j.changeJobStatus("UPLOADING")
+func (j *JobService) performUpload(job *domain.Job, video *domain.Video) error {
+	err := j.changeJobStatus(job, "UPLOADING")
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
 	videoUpload := NewVideoUpload()
@@ -99,31 +98,31 @@ func (j *JobService) performUpload(video *domain.Video) error {
 	uploadResult = <-doneUpload
 
 	if uploadResult != "Upload completed" {
-		return j.failJob(errors.New(uploadResult))
+		return j.failJob(job, errors.New(uploadResult))
 	}
 
 	return err
 }
 
-func (j *JobService) changeJobStatus(status string) error {
+func (j *JobService) changeJobStatus(job *domain.Job, status string) error {
 	var err error
 
-	j.Job.Status = status
-	j.Job, err = j.JobRepository.Update(j.Job)
+	job.Status = status
+	job, err = j.JobRepository.Update(job)
 
 	if err != nil {
-		return j.failJob(err)
+		return j.failJob(job, err)
 	}
 
 	return nil
 }
 
-func (j *JobService) failJob(error error) error {
+func (j *JobService) failJob(job *domain.Job, error error) error {
 
-	j.Job.Status = "FAILED"
-	j.Job.Error = error.Error()
+	job.Status = "FAILED"
+	job.Error = error.Error()
 
-	_, err := j.JobRepository.Update(j.Job)
+	_, err := j.JobRepository.Update(job)
 
 	if err != nil {
 		return err

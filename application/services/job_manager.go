@@ -52,7 +52,7 @@ func (j *JobManager) Start(ch *amqp.Channel) {
 	}
 
 	for qtdProcesses := 0; qtdProcesses < concurrency; qtdProcesses++ {
-		go JobWorker(j.MessageChannel, j.JobReturnChannel, jobService, j.Domain, qtdProcesses)
+		go JobWorker(j.MessageChannel, j.JobReturnChannel, jobService)
 	}
 
 	for jobResult := range j.JobReturnChannel {

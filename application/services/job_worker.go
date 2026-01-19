@@ -17,7 +17,7 @@ type JobWorkerResult struct {
 	Error   error
 }
 
-func JobWorker(messageChannel chan amqp.Delivery, returnChan chan JobWorkerResult, jobService JobService, job domain.Job, workerId int) {
+func JobWorker(messageChannel chan amqp.Delivery, returnChan chan JobWorkerResult, jobService JobService) {
 
 	for message := range messageChannel {
 
@@ -50,27 +50,27 @@ func JobWorker(messageChannel chan amqp.Delivery, returnChan chan JobWorkerResul
 			continue
 		}
 
+		job := &domain.Job{}
 		job.Video = video
 		job.OutputBucketPath = os.Getenv("outputBucketName")
 		job.ID = uuid.NewV4().String()
 		job.Status = "STARTING"
 		job.CreatedAt = time.Now()
 
-		_, err = jobService.JobRepository.Insert(&job)
+		_, err = jobService.JobRepository.Insert(job)
 		if err != nil {
 			returnChan <- returnJobResult(domain.Job{}, message, err)
 			continue
 		}
 
-		jobService.Job = &job
-		err = jobService.Start(video)
+		err = jobService.Start(job, video)
 
 		if err != nil {
 			returnChan <- returnJobResult(domain.Job{}, message, err)
 			continue
 		}
 
-		returnChan <- returnJobResult(job, message, nil)
+		returnChan <- returnJobResult(*job, message, nil)
 	}
 }
 
