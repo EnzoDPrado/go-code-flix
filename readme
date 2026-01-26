@@ -1,0 +1,96 @@
+# 🎬 High-Performance Video Encoder Microservice
+
+Este microsserviço é uma solução robusta para o processamento, fragmentação e distribuição de vídeos. Ele opera de forma orientada a eventos, consumindo mensagens do **RabbitMQ**, processando arquivos via **Bento4** e gerenciando o armazenamento no **Google Cloud Storage (GCS)**.
+
+## 🛠️ Tecnologias e Conceitos Dominados
+
+- **Linguagem:** Go (Golang) 1.14+
+- **Concorrência Avançada:** Implementação de **Worker Pools** utilizando `Go Routines` e `Channels` para otimizar o upload paralelo de fragmentos.
+- **Processamento de Vídeo:** Integração com toolkit **Bento4** (`mp4fragment` e `mp4dash`) via execução de comandos do sistema.
+- **Cloud Native:** Integração nativa com o SDK do Google Cloud Storage.
+- **Arquitetura:** Separação clara entre camadas de domínio, repositórios e serviços de aplicação.
+- **Testes:** Cobertura de lógica de negócio através de testes unitários.
+
+## 🏗️ Fluxo de Processamento
+
+O sistema segue um pipeline linear de responsabilidades:
+
+1.  **Download:** O vídeo original é baixado do Bucket GCS para o armazenamento local.
+2.  **Fragmentação:** O arquivo `.mp4` é fragmentado utilizando o `mp4fragment`.
+3.  **DASH Encoding:** O arquivo fragmentado é convertido para o padrão DASH (Dynamic Adaptive Streaming over HTTP) com `mp4dash`.
+4.  **Upload Concorrente:** Os arquivos gerados são carregados de volta para a nuvem usando um pool de workers para máxima performance.
+5.  **Clean Up:** Limpeza total dos arquivos temporários para otimizar o espaço em disco do container.
+
+---
+
+## 🔧 Configurando o Ambiente
+
+### 1. Requisitos Prévios
+
+- Duplique o arquivo `.env.example` para `.env` e preencha as variáveis.
+- **GCP:** Salve o JSON com suas credenciais de serviço na raiz como `bucket-credential.json`.
+- **RabbitMQ:** - Crie uma Exchange do tipo `fanout` para servir de **Dead Letter Exchange (DLX)**.
+  - Crie uma Queue e faça o binding na DLX para capturar mensagens não processadas.
+
+### 2. Execução com Docker
+
+Certifique-se de que o Docker e o Docker Compose estão instalados. Para subir o ambiente completo (Aplicação + RabbitMQ + Postgres), utilize o comando:
+
+docker-compose up -d
+
+---
+
+## 📨 Padrão de Mensagens
+
+### Entrada (Input)
+
+O encoder espera um JSON no RabbitMQ (na fila configurada) com este formato:
+
+```json
+{
+  "resource_id": "meu-uuid-de-video",
+  "file_path": "caminho/do/video/no/bucket.mp4"
+}
+```
+
+### Saída (Success Output)
+
+Ao finalizar o processamento com sucesso, o sistema notifica a exchange de saída:
+
+```json
+{
+  "id": "bbbdd123-ad05-4dc8-a74c-d63a0a2423d5",
+  "output_bucket_path": "bucket-de-destino",
+  "status": "COMPLETED",
+  "video": {
+    "encoded_video_folder": "id-da-pasta-convertida",
+    "resource_id": "meu-uuid-de-video",
+    "file_path": "video.mp4"
+  },
+  "error": "",
+  "created_at": "2026-01-26T16:55:00Z",
+  "updated_at": "2026-01-26T16:58:00Z"
+}
+```
+
+---
+
+### 📊 Resiliência e Dead Letter Queue (DLQ)
+
+O sistema foi desenhado para ser tolerante a falhas. Caso ocorra um erro em qualquer etapa do pipeline (Download, Fragmentação ou Upload):
+
+1. Logs: O erro é registrado detalhadamente no console do container.
+
+2. Encaminhamento: A mensagem original é enviada para a Dead Letter Exchange (DLX) configurada no .env.
+
+3. Payload de Erro: O padrão enviado à DLQ é:
+
+```json
+{
+  "message": {
+    "resource_id": "meu-uuid-de-video",
+    "file_path": "video.mp4"
+  },
+  "error": "Descrição detalhada do erro ocorrido"
+}
+```
