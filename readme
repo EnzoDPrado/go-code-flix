@@ -36,9 +36,9 @@ O sistema segue um pipeline linear de responsabilidades:
 
 Certifique-se de que o Docker e o Docker Compose estão instalados. Para subir o ambiente completo (Aplicação + RabbitMQ + Postgres), utilize o comando:
 
+```bash
 docker-compose up -d
-
----
+```
 
 ## 📨 Padrão de Mensagens
 
